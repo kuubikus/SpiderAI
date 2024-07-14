@@ -290,6 +290,8 @@ class GameView(arcade.View, gym.Env):
                 self.move_card_to_new_pile(card, settings.FOUNDATION_PILE)
 
     def on_update(self, delta_time):
+        # Reset reward for action
+        self.reward = 0
         # Accumulate the total time
         self.total_time += delta_time
         # Calculate minutes
@@ -306,6 +308,7 @@ class GameView(arcade.View, gym.Env):
         if self.game_over and len(self.piles[settings.FOUNDATION_PILE]) == 104:
             print("Game is done")
             self.score += 1000000/self.total_time
+            self.reward = 1000000
 
         """if seconds == 2 and seconds_100s > 0 and seconds_100s < 4:
             # Example action: Move cards
@@ -437,6 +440,7 @@ class GameView(arcade.View, gym.Env):
                         top_card.face_up()
                         # Turning over a card adds 10 points
                         self.score += 10
+                        self.reward += 10
 
                 # Check if the move resulted in forming a stack
                 sequence = self.stack_completed(destination_pile_index)
@@ -446,6 +450,7 @@ class GameView(arcade.View, gym.Env):
                     self.remove_stack(sequence)
                     # Add points
                     self.score += 130
+                    self.reward += 130
                     # check if a card needs to be turned over
                     if len(self.piles[destination_pile_index]) > 0:
                         top_card = self.piles[destination_pile_index][-1]
@@ -453,6 +458,7 @@ class GameView(arcade.View, gym.Env):
                             top_card.face_up()
                             # Turning over a card adds 10 points
                             self.score += 10
+                            self.reward += 10
                     # check if the game is over
                     if len(self.piles[settings.FOUNDATION_PILE]) == 104:
                         self.game_over = True
@@ -468,8 +474,6 @@ class GameView(arcade.View, gym.Env):
         self.held_cards = []
 
     def step(self, action):
-        # Reset reward for action
-        self.reward = 0
         action_type, source, destination = action
         # Move card action type
         if action_type == 0:
