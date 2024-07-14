@@ -320,20 +320,14 @@ class GameView(arcade.View, gym.Env):
             except ValueError as e:
                 print(e)"""
 
-        
-        if seconds == 2 and seconds_100s == 0:
-            print("dealing cards")
-            # Example action: deal new cards
-            action_deal = (1, 0, 0)
-            try:
-                next_state, reward, done, eh, info = self.step(action_deal)
-                print("State after dealing cards:")
-                print(f"Reward: {reward}, Done: {done}")
-                print("The card in face down pile: ", self.piles[settings.BOTTOM_FACE_DOWN_PILE][-1].value, self.piles[settings.BOTTOM_FACE_DOWN_PILE][-1].suit)
-                print("The card in 1st play pile: ", self.piles[settings.PLAY_PILE_1][-1].value, self.piles[settings.PLAY_PILE_1][-1].suit)
-            except ValueError as e:
-                print(e)
-        
+        if test_actions:
+            action = test_actions.pop(0)
+            print(action)
+            next_state, reward, done, eh, info = self.step(action)
+            print(f"Reward: {reward}, Done: {done}")
+            print(f"The score is {self.score}")
+            if not test_actions:
+                self.game_over = True
         
     def get_possible_moves(self):
         """
@@ -367,10 +361,18 @@ class GameView(arcade.View, gym.Env):
         INPUTS: source: pile index for the card(s) to be moved from
                 destination: pile index for the card(s) to be moved to
         """
-        source = self.piles[source_pile_index][-1]
-        
+        # Get all playable cards (along with stacks)
+        playable_cards = self.get_playable_cards()
+
+        for playable_card in playable_cards: 
+            # Find a card that corresponds to the one we want to move
+            if self.get_pile_for_card(playable_card) == source_pile_index:
+                self.held_cards = [playable_card]
+                break
+
+        source = self.held_cards[0]
+        print(f"Moving card with value {source.value} and suit {source.suit} to pile {destination_pile_index}")
         reset_position = True
-        self.held_cards = [source]
         # Save the position
         self.held_cards_original_position = [self.held_cards[0].position]
         # Put on top in drawing order
@@ -455,7 +457,6 @@ class GameView(arcade.View, gym.Env):
                     if len(self.piles[settings.FOUNDATION_PILE]) == 104:
                         self.game_over = True
 
-
         if reset_position:
             print("Invalid move")
             # Where-ever we were dropped, it wasn't valid. Reset the each card's position
@@ -499,12 +500,14 @@ class GameView(arcade.View, gym.Env):
         observation = self.get_playable_cards()
         return observation, reward, self.game_over, False, {}
 
+test_actions = [(1,0,0), (1,0,0),(0,1,0),(0,2,0),(0,3,0),(0,4,0),(0,5,0),(0,6,0),(0,7,0),(0,8,0),(0,9,0),(0,0,9),(1,0,0),(0,9,8),(0,1,0),(0,0,9)]
+
 def main():
     """ Main function """
     window = arcade.Window(settings.SCREEN_WIDTH, settings.SCREEN_HEIGHT, settings.SCREEN_TITLE)
     # Set frame rate
     # Agent makes a decision at each frame
-    window.set_update_rate(1/10)
+    window.set_update_rate(1)
     env = GameView(render_mode="human")
     window.show_view(env)
     env.reset()
