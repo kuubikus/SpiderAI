@@ -17,14 +17,18 @@ class GameView(arcade.View, gym.Env):
         super().__init__()
         self.game_over = False
         self.render_mode = render_mode
+        # History
+        self.no_of_moves_made = 0
+        # Necessary to undo more than one turn
+        self.undo_counter = -1
         # All visible mats with 104 cards in total
         self.observation_space = spaces.MultiBinary((10, 104))
-        # Action space as (source, destination) and (deal or no)
-        self.action_space = spaces.MultiDiscrete([2, 10, 10])
+        # Action space as move/deal/undo, move(source, destination)
+        self.action_space = spaces.MultiDiscrete([3, 10, 10])
         # Reward
         self.reward = 0
-
-        
+        # History. A dictinary in the format key: source index, item: destiantion index
+        self.history = {}
 
         # Timer set up
         self.total_time = 0.0
@@ -310,19 +314,6 @@ class GameView(arcade.View, gym.Env):
             self.score += 1000000/self.total_time
             self.reward = 1000000
 
-        """if seconds == 2 and seconds_100s > 0 and seconds_100s < 4:
-            # Example action: Move cards
-            print("moving cards")
-            action_deal = (0, 0, 2)
-            try:
-                next_state, reward, done, eh, info = self.step(action_deal)
-                print("State after moving cards:")
-                print(f"Reward: {reward}, Done: {done}")
-                print("The card in face down pile: ", self.piles[settings.BOTTOM_FACE_DOWN_PILE][-1].value, self.piles[settings.BOTTOM_FACE_DOWN_PILE][-1].suit)
-                print("The card in 1st play pile: ", self.piles[settings.PLAY_PILE_1][-1].value, self.piles[settings.BOTTOM_FACE_DOWN_PILE][-1].suit)
-            except ValueError as e:
-                print(e)"""
-
         if test_actions:
             action = test_actions.pop(0)
             print(action)
@@ -331,7 +322,7 @@ class GameView(arcade.View, gym.Env):
             print(f"The score is {self.score}")
             if not test_actions:
                 self.game_over = True
-        
+    
     def get_possible_moves(self):
         """
         Returns a dictionray of possible moves. The key is the card that can be played. 
@@ -408,17 +399,21 @@ class GameView(arcade.View, gym.Env):
 
             # Is it on a play pile?
             elif settings.PLAY_PILE_1 <= destination_pile_index <= settings.PLAY_PILE_10:
+                # New action - reset undo counter
+                self.undo_counter = -1
                 # Are there already cards there?
                 if len(self.piles[destination_pile_index]) > 0:
                     # Move cards to proper position
                     top_card = self.piles[destination_pile_index][-1]
                     for i, dropped_card in enumerate(self.held_cards):
+                        dropped_card.add_to_history(self.no_of_moves_made, source_pile_index, self.held_cards_original_position[i])
                         dropped_card.position = top_card.center_x, \
                                                 top_card.center_y - settings.CARD_VERTICAL_OFFSET * (i + 1)
                 else:
                     # Are there no cards in the middle play pile?
                     for i, dropped_card in enumerate(self.held_cards):
                         # Move cards to proper position
+                        dropped_card.add_to_history(self.no_of_moves_made, source_pile_index, self.held_cards_original_position[i])
                         dropped_card.position = self.piles[destination_pile_index][-1].center_x, \
                                                 self.piles[destination_pile_index][-1].center_y - settings.CARD_VERTICAL_OFFSET * i
 
@@ -426,18 +421,13 @@ class GameView(arcade.View, gym.Env):
                 for card in self.held_cards:
                     # Cards are in the right position, but we need to move them to the right list
                     self.move_card_to_new_pile(card, destination_pile_index)
-    
-
-                # Success, don't reset position of cards
-                reset_position = False
-                # Add a reward for correct move
-                self.reward += 1
 
                 # Flip over top card
                 if len(self.piles[source_pile_index]) > 0:
                     top_card = self.piles[source_pile_index][-1]
                     if not top_card.is_face_up:
                         top_card.face_up()
+                        top_card.add_to_history(self.no_of_moves_made, flipped=True)
                         # Turning over a card adds 10 points
                         self.score += 10
                         self.reward += 10
@@ -456,12 +446,19 @@ class GameView(arcade.View, gym.Env):
                         top_card = self.piles[destination_pile_index][-1]
                         if not top_card.is_face_up:
                             top_card.face_up()
+                            top_card.add_to_history(self.no_of_moves_made, flipped=True)
                             # Turning over a card adds 10 points
                             self.score += 10
                             self.reward += 10
                     # check if the game is over
                     if len(self.piles[settings.FOUNDATION_PILE]) == 104:
                         self.game_over = True
+
+                # Success, don't reset position of cards
+                reset_position = False
+                # Add a reward for correct move
+                self.reward += 1
+                self.no_of_moves_made += 1
 
         if reset_position:
             print("Invalid move")
@@ -479,8 +476,10 @@ class GameView(arcade.View, gym.Env):
         if action_type == 0:
             self.move_card(source, destination)
         # Deal cards action type
-        else:
-            # deal cards
+        elif action_type == 1:
+            # Deal cards
+            # New action, reset undo counter
+            self.undo_counter = -1
             # Figure out what pile the card is in
             self.reward -= 5
             self.score -= 10
@@ -491,6 +490,8 @@ class GameView(arcade.View, gym.Env):
                         card = self.piles[settings.BOTTOM_FACE_DOWN_PILE][-1]
                         # Flip face up
                         card.face_up()
+                        # Update history
+                        card.add_to_history(self.no_of_moves_made, settings.BOTTOM_FACE_DOWN_PILE, card.position,True)
                         # Move card to position
                         card.position = last_card.center_x, last_card.center_y - settings.CARD_VERTICAL_OFFSET
                         # Remove card from face down pile
@@ -499,12 +500,41 @@ class GameView(arcade.View, gym.Env):
                         self.move_card_to_new_pile(card, pile_index)
                         # Put on top draw-order wise
                         self.pull_to_top(card)
+                        
+            self.no_of_moves_made += 1
+        elif action_type == 2:
+            self.undo_counter += 2
+            print("Undo counter", self.undo_counter)
+            self.undo(self.no_of_moves_made-self.undo_counter)
+            self.no_of_moves_made += 1
 
         reward = self.reward
         observation = self.get_playable_cards()
         return observation, reward, self.game_over, False, {}
 
-test_actions = [(1,0,0), (1,0,0),(0,1,0),(0,2,0),(0,3,0),(0,4,0),(0,5,0),(0,6,0),(0,7,0),(0,8,0),(0,9,0),(0,0,9),(1,0,0),(0,9,8),(0,1,0),(0,0,9)]
+    def undo(self, move_no):
+        print("undo")
+        for i in range(10,-1,-1):
+            pile = self.piles[i]
+            for j, card in enumerate(pile):
+                if card.is_face_up:
+                    if move_no in card.history.keys():
+                        position, previous_pile_index, flipped = card.history[move_no]
+                        if position is not None and previous_pile_index is not None:
+                            # Move card
+                            card.position = position
+                            # Update pile
+                            self.move_card_to_new_pile(card,previous_pile_index)
+                            # Update card history
+                            card.add_to_history(self.no_of_moves_made, previous_pile_index, card.position)
+                        if flipped:
+                            card.face_down()
+                            self.reward -= 10
+
+# For movement and drawing cards
+#test_actions = [(1,0,0), (1,0,0),(0,1,0),(0,2,0),(0,3,0),(0,4,0),(0,5,0),(0,6,0),(0,7,0),(0,8,0),(0,9,0),(0,0,9),(1,0,0),(0,9,8),(0,1,0),(0,0,9)]
+# For Undo
+test_actions = [(0,2,4),(0,4,2),(2,0,0),(0,4,2),(0,0,2),(1,0,0),(0,2,1),(2,0,0),(2,0,0),(2,0,0)]
 
 def main():
     """ Main function """
