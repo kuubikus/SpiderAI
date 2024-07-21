@@ -30,6 +30,12 @@ class Card(arcade.Sprite):
         self.texture = arcade.load_texture(self.image_file_name)
         self.is_face_up = True
 
+    def get_suit_encoded(self):
+        return settings.CARD_SUITS_ENCODED[self.suit]
+    
+    def get_value_encoded(self):
+        return settings.CARD_VALUES_ENCODED[self.value]
+
     @property
     def is_face_down(self):
         """ Is this card face down? """

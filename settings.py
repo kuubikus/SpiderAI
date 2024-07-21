@@ -23,7 +23,9 @@ START_X = MAT_WIDTH / 2 + MAT_WIDTH * HORIZONTAL_MARGIN_PERCENT
 
 # Card constants
 CARD_VALUES = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"]
+CARD_VALUES_ENCODED = {"A":1, "2":2, "3":3, "4":4, "5":5, "6":6, "7":7, "8":8, "9":9, "10":10, "J":11, "Q":12, "K":13}
 CARD_SUITS = ["Clubs", "Hearts", "Spades", "Diamonds"]
+CARD_SUITS_ENCODED = {"Clubs":1, "Hearts":2, "Spades":3, "Diamonds":4}
 
 # Screen title and size
 SCREEN_WIDTH = 1280

@@ -8,6 +8,7 @@ import random
 import arcade.gui 
 import gymnasium as gym
 from gymnasium import spaces
+import numpy as np
 
 class GameView(arcade.View, gym.Env):
     """ Main application class. """
@@ -22,7 +23,7 @@ class GameView(arcade.View, gym.Env):
         # Necessary to undo more than one turn
         self.undo_counter = -1
         # All visible mats with 104 cards in total
-        self.observation_space = spaces.MultiBinary((10, 104))
+        self.observation_space = spaces.Box(low=0,high=52,shape=(settings.PILE_COUNT,104),dtype=np.int8)
         # Action space as move/deal/undo, move(source, destination)
         self.action_space = spaces.MultiDiscrete([3, 10, 10])
         # Reward
@@ -314,14 +315,19 @@ class GameView(arcade.View, gym.Env):
             self.score += 1000000/self.total_time
             self.reward = 1000000
 
-        if test_actions:
+        """if test_actions:
             action = test_actions.pop(0)
             print(action)
             next_state, reward, done, eh, info = self.step(action)
             print(f"Reward: {reward}, Done: {done}")
             print(f"The score is {self.score}")
             if not test_actions:
-                self.game_over = True
+                self.game_over = True"""
+        """if self.total_time > 2 and self.total_time < 3:
+            print("writing to file")
+            array_flattened = self.get_observations().reshape(-1, self.get_observations().shape[-1])
+            np.savetxt("array_of_zeros.txt", array_flattened, fmt='%d')"""
+        
     
     def get_possible_moves(self):
         """
@@ -341,12 +347,26 @@ class GameView(arcade.View, gym.Env):
         return possible_moves
     
     # For  gymnasium
+    def get_observations(self):
+        """
+        Returns observations as a 2D numpy array. Each row is a pile in the game. Cards are represented as a tuple (encoded value, encoded suit).
+        If the card is not visible then it is 0.
+        """
+        observations = np.zeros(shape=(settings.PILE_COUNT, 104,2))
+        for pile_index, pile in enumerate(self.piles):
+            for card_index, card in enumerate(pile):
+                if card.is_face_up:
+                    observations[pile_index,card_index] = [card.get_value_encoded(), card.get_suit_encoded()]
+                else:
+                    observations[pile_index,card_index] = [-1,-1]
+        return observations
+    
     def reset(self):
         """
         Gymnasium API for initializing/resetting the game
         """
         self.setup()
-        observation = self.get_playable_cards()
+        observation = self.get_observations()
         return observation, {}
     
     def move_card(self, source_pile_index, destination_pile_index):
@@ -509,7 +529,7 @@ class GameView(arcade.View, gym.Env):
             self.no_of_moves_made += 1
 
         reward = self.reward
-        observation = self.get_playable_cards()
+        observation = self.get_observations()
         return observation, reward, self.game_over, False, {}
 
     def undo(self, move_no):
